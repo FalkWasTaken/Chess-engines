@@ -1,0 +1,182 @@
+import java.awt.*;
+import java.awt.Color;
+import java.awt.event.*;
+import javax.swing.*;
+
+public class Game extends JFrame implements MouseListener, MouseMotionListener {
+    JLayeredPane layeredPane;
+    JPanel boardUI;
+    JLabel chessPiece;
+    int xAdjustment;
+    int yAdjustment;
+    int step;
+
+    Chess chess;
+    boolean canMove;
+    int yCurr;
+    int xCurr;
+
+    public Game() {
+        Dimension boardSize = new Dimension(600, 600);
+
+        //  Use a Layered Pane for this this application
+        layeredPane = new JLayeredPane();
+        getContentPane().add(layeredPane);
+        layeredPane.setPreferredSize(boardSize);
+        layeredPane.addMouseListener(this);
+        layeredPane.addMouseMotionListener(this);
+
+        //Add a chess board to the Layered Pane
+        boardUI = new JPanel();
+        layeredPane.add(boardUI, JLayeredPane.DEFAULT_LAYER);
+        boardUI.setLayout(new GridLayout(8, 8));
+        boardUI.setPreferredSize(boardSize);
+        boardUI.setBounds(0, 0, boardSize.width, boardSize.height);
+        step = (boardUI.getHeight()/8);
+
+        for (int i = 0; i < 64; i++) {
+            JPanel square = new JPanel(new BorderLayout());
+            boardUI.add(square);
+
+            int row = (i / 8) % 2;
+            if (row == 0)
+                square.setBackground(i % 2 == 0 ? new Color(255, 250, 224) : new Color(83, 145, 88));
+            else
+                square.setBackground(i % 2 == 0 ? new Color(83, 145, 88) : new Color(255, 250, 224));
+        }
+
+        //Add pieces to the board
+        placePiece(0, 0, "rook_b");
+        placePiece(0, 1, "knight_b");
+        placePiece(0, 2, "bishop_b");
+        placePiece(0, 3, "queen_b");
+        placePiece(0, 4, "king_b");
+        placePiece(0, 5, "bishop_b");
+        placePiece(0, 6, "knight_b");
+        placePiece(0, 7, "rook_b");
+
+        placePiece(7, 0, "rook_w");
+        placePiece(7, 1, "knight_w");
+        placePiece(7, 2, "bishop_w");
+        placePiece(7, 3, "queen_w");
+        placePiece(7, 4, "king_w");
+        placePiece(7, 5, "bishop_w");
+        placePiece(7, 6, "knight_w");
+        placePiece(7, 7, "rook_w");
+
+        for (int j = 0; j < 8; j++) {
+            placePiece(1, j, "pawn_b");
+            placePiece(6, j, "pawn_w");
+        }
+
+        chess = new Chess();
+        canMove = false;
+    }
+
+    private void placePiece(int i, int j, String piece) {
+        JLabel pieceUI = new JLabel(new ImageIcon("pieces/" + piece + ".png"));
+        int index = 8 * i + j;
+        JPanel panel = (JPanel)boardUI.getComponent(index);
+        panel.add(pieceUI);
+    }
+
+    private int quantize(int x) {
+        return x / step;
+    }
+
+    public void mousePressed(MouseEvent e){
+        chessPiece = null;
+        Component c = boardUI.findComponentAt(e.getX(), e.getY());
+
+        if (c instanceof JPanel)
+            return;
+
+        Point parentLocation = c.getParent().getLocation();
+        xAdjustment = parentLocation.x - e.getX();
+        yAdjustment = parentLocation.y - e.getY();
+        xCurr = e.getX();
+        yCurr = e.getY();
+
+        if(chess.validPLayer(quantize(xCurr), quantize(yCurr))) {
+            chessPiece = (JLabel)c;
+            chessPiece.setLocation(e.getX() + xAdjustment, e.getY() + yAdjustment);
+            chessPiece.setSize(chessPiece.getWidth(), chessPiece.getHeight());
+            layeredPane.add(chessPiece, JLayeredPane.DRAG_LAYER);
+            canMove = true;
+        }
+    }
+
+    //Move the chess piece around
+
+    public void mouseDragged(MouseEvent me) {
+        if (chessPiece == null || !canMove) return;
+        chessPiece.setLocation(me.getX() + xAdjustment, me.getY() + yAdjustment);
+    }
+
+    //Drop the chess piece back onto the chess board
+
+    public void mouseReleased(MouseEvent e) {
+        if (chessPiece == null) return;
+
+        chessPiece.setVisible(false);
+        Component c =  boardUI.findComponentAt(e.getX(), e.getY());
+
+        Triplet<Boolean, Integer, Integer> res = chess.tryMove(quantize(xCurr), quantize(yCurr), quantize(e.getX()), quantize(e.getY()));
+        if (res.fst) {
+            if (c instanceof JLabel) {
+                Container parent = c.getParent();
+                parent.remove(0);
+                parent.add(chessPiece);
+            } else {
+                Container parent = (Container)c;
+                parent.add(chessPiece);
+            }
+            if (res.snd != 0) {
+                System.out.println("En passant!");
+                c = boardUI.findComponentAt(e.getX(), res.snd*step);
+                Container parent = c.getParent();
+                parent.remove(0);
+                parent.repaint();
+            } else if (res.thd >= 0) {
+                System.out.println("Castle!");
+                int xRook = res.thd*step;
+                JLabel rook = (JLabel)boardUI.findComponentAt(xRook, e.getY());
+                rook.setVisible(false);
+                Container parent = rook.getParent();
+                parent.repaint();
+                parent.remove(0);
+                int xNew = (xRook < e.getX() ? e.getX() + step : e.getX() - step);
+                parent = (Container)boardUI.findComponentAt(xNew, e.getY());
+                parent.add(rook);
+                rook.setVisible(true);
+            }
+        } else {
+            c = boardUI.findComponentAt(xCurr, yCurr);
+            Container parent = (Container)c;
+            parent.add(chessPiece);
+        }
+        canMove = false;
+        chessPiece.setVisible(true);
+    }
+
+    public void mouseClicked(MouseEvent e) {
+
+    }
+    public void mouseMoved(MouseEvent e) {
+    }
+    public void mouseEntered(MouseEvent e){
+
+    }
+    public void mouseExited(MouseEvent e) {
+
+    }
+
+    public static void main(String[] args) {
+        JFrame frame = new Game();
+        frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE );
+        frame.pack();
+        frame.setResizable(true);
+        frame.setLocationRelativeTo( null );
+        frame.setVisible(true);
+    }
+}
